@@ -173,6 +173,57 @@ SPECIAL_LOCALES = {
     "iu-Latn-CA": "因纽特语（加拿大）",
 }
 
+# 音色人物本地化名称（各国母语文字），未收录的自动用拉丁名
+VOICE_NAMES = {
+    # 中文
+    "zh-CN-XiaoxiaoNeural": "晓晓",
+    "zh-CN-XiaoyiNeural": "晓伊",
+    "zh-CN-YunjianNeural": "云健",
+    "zh-CN-YunxiNeural": "云希",
+    "zh-CN-YunxiaNeural": "云夏",
+    "zh-CN-YunyangNeural": "云扬",
+    "zh-CN-liaoning-XiaobeiNeural": "晓北",
+    "zh-CN-shaanxi-XiaoniNeural": "晓妮",
+    "zh-TW-HsiaoChenNeural": "曉臻",
+    "zh-TW-HsiaoYuNeural": "曉雨",
+    "zh-TW-YunJheNeural": "雲哲",
+    "zh-HK-HiuGaaiNeural": "曉佳",
+    "zh-HK-HiuMaanNeural": "曉曼",
+    "zh-HK-WanLungNeural": "雲龍",
+    # 日语
+    "ja-JP-NanamiNeural": "七海",
+    "ja-JP-KeitaNeural": "圭太",
+    # 韩语
+    "ko-KR-SunHiNeural": "선히",
+    "ko-KR-InJoonNeural": "인준",
+    "ko-KR-HyunsuMultilingualNeural": "현수",
+    # 俄语
+    "ru-RU-DmitryNeural": "Дмитрий",
+    "ru-RU-SvetlanaNeural": "Светлана",
+    # 乌克兰语
+    "uk-UA-OstapNeural": "Остап",
+    "uk-UA-PolinaNeural": "Поліна",
+    # 保加利亚语
+    "bg-BG-BorislavNeural": "Борислав",
+    "bg-BG-KalinaNeural": "Калина",
+    # 希腊语
+    "el-GR-AthinaNeural": "Αθηνά",
+    "el-GR-NestorasNeural": "Νέστορας",
+    # 哈萨克语
+    "kk-KZ-AigulNeural": "Айгүл",
+    "kk-KZ-DauletNeural": "Дәулет",
+    # 蒙古语
+    "mn-MN-BataaNeural": "Батаа",
+    "mn-MN-YesuiNeural": "Есүй",
+}
+
+
+def voice_display(short_name: str) -> str:
+    """返回音色人物名称, 优先本地化名, 否则去掉前缀后缀的拉丁名。"""
+    if short_name in VOICE_NAMES:
+        return VOICE_NAMES[short_name]
+    return re.sub(r"(Multilingual|Expressive)?Neural$", "", short_name.split("-", 2)[-1])
+
 
 def locale_display(locale: str) -> str:
     if locale in SPECIAL_LOCALES:
@@ -227,6 +278,7 @@ async def api_voices():
     for v in _voice_cache:
         countries.setdefault(v["Locale"], []).append({
             "name": v["ShortName"],
+            "display": voice_display(v["ShortName"]),
             "gender": "女" if v["Gender"] == "Female" else "男",
         })
     out = [{

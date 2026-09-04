@@ -82,7 +82,7 @@ function onCountryChange() {
   const locale = els.countrySel.value;
   const voices = voicesByLocale[locale] || [];
   els.voiceSel.innerHTML = voices
-    .map((v) => `<option value="${v.name}">${v.name.replace(/^\w+-\w+-/, "").replace(/Neural$/, "")} · ${v.gender}声</option>`)
+    .map((v) => `<option value="${v.name}">${v.display} · ${v.gender}声</option>`)
     .join("");
   els.voiceSel.disabled = voices.length === 0;
   els.previewBtn.disabled = voices.length === 0;
@@ -91,7 +91,9 @@ function onCountryChange() {
 
 function updateHint() {
   const v = els.voiceSel.value;
-  els.voiceHint.textContent = v ? `当前音色：${v}` : "";
+  if (!v) { els.voiceHint.textContent = ""; return; }
+  const info = (voicesByLocale[els.countrySel.value] || []).find((o) => o.name === v);
+  els.voiceHint.textContent = `当前音色：${info ? info.display : v}`;
 }
 
 async function preview() {
