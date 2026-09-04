@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edge TTS 语音工作台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">◉</span>Edge TTS 语音工作台</div>
+  <div class="sub">微软神经网络语音 · 免费无限制 · 文件自动保存到工程</div>
+</header>
+
+<main class="wrap">
+  <section class="col-main">
+    <!-- 文本 -->
+    <div class="card">
+      <div class="card-head">
+        <h2><i class="ic">✎</i>文本内容</h2>
+        <div class="head-actions">
+          <button id="clearBtn" class="ghost-btn small">清空</button>
+          <button id="importBtn" class="ghost-btn small">导入 TXT</button>
+          <input type="file" id="fileInput" accept=".txt" hidden>
+        </div>
+      </div>
+      <textarea id="textInput" placeholder="请输入或粘贴要转换的文字…&#10;支持长文本，将自动分段合成后合并为一个 MP3。"></textarea>
+      <div class="meta-row"><span id="charCount">0 字</span></div>
+    </div>
+
+    <!-- 音色 -->
+    <div class="card">
+      <div class="card-head"><h2><i class="ic">🎙</i>音色选择</h2></div>
+      <div class="grid2">
+        <label class="field"><span>国家 / 地区</span>
+          <select id="countrySel"><option value="">加载中…</option></select>
+        </label>
+        <label class="field"><span>音色</span>
+          <select id="voiceSel" disabled><option>请先选择国家/地区</option></select>
+        </label>
+      </div>
+      <div class="preview-row">
+        <button id="previewBtn" class="ghost-btn" disabled>▶ 试听音色</button>
+        <span id="voiceHint" class="hint"></span>
+      </div>
+      <div class="grid3">
+        <label class="field"><span>语速 <output id="rateVal">0%</output></span>
+          <input type="range" id="rate" min="-50" max="100" step="5" value="0">
+        </label>
+        <label class="field"><span>音量 <output id="volumeVal">0%</output></span>
+          <input type="range" id="volume" min="-100" max="50" step="5" value="0">
+        </label>
+        <label class="field"><span>音调 <output id="pitchVal">0Hz</output></span>
+          <input type="range" id="pitch" min="-50" max="50" step="5" value="0">
+        </label>
+      </div>
+    </div>
+
+    <!-- 转换 -->
+    <div class="convert-area">
+      <button id="convertBtn" class="primary big" disabled>开始转换</button>
+      <div id="progress" class="progress hidden">
+        <div class="bar"><i></i></div>
+        <span id="progressText">准备中…</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="col-side">
+    <!-- 工程 -->
+    <div class="card">
+      <div class="card-head">
+        <h2><i class="ic">📁</i>工程</h2>
+        <button id="storageBtn" class="ghost-btn small" title="修改默认存储位置">位置</button>
+      </div>
+      <div class="row">
+        <select id="projectSel"></select>
+      </div>
+      <div class="row btns">
+        <button id="newProjBtn" class="ghost-btn">＋ 新建工程</button>
+        <button id="openBtn" class="ghost-btn" title="打开工程文件夹">📂 打开文件夹</button>
+      </div>
+    </div>
+
+    <!-- 结果 -->
+    <div class="card hidden" id="resultCard">
+      <div class="card-head"><h2><i class="ic">🎧</i>转换结果</h2></div>
+      <audio id="player" controls></audio>
+      <div class="result-meta"><span id="resultFile"></span></div>
+    </div>
+
+    <!-- 文件列表 -->
+    <div class="card">
+      <div class="card-head">
+        <h2><i class="ic">📄</i>工程文件</h2>
+        <button id="refreshBtn" class="ghost-btn small">刷新</button>
+      </div>
+      <ul id="fileList" class="files"></ul>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<div id="modal" class="modal-mask hidden">
+  <div class="modal">
+    <h3>新建工程</h3>
+    <input id="projNameInput" type="text" placeholder="输入工程名称，如：产品介绍视频" maxlength="50">
+    <div class="field dir-field"><span>存储位置</span>
+      <div class="row dir-row">
+        <input id="projDirInput" type="text" placeholder="留空则使用默认存储位置">
+        <button id="projDirPick" class="ghost-btn">选择</button>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button id="modalCancel" class="ghost-btn">取消</button>
+      <button id="modalOk" class="primary">创建</button>
+    </div>
+  </div>
+</div>
+
+<div id="storageModal" class="modal-mask hidden">
+  <div class="modal">
+    <h3 id="storageTitle">选择语音保存位置</h3>
+    <p class="modal-desc" id="storageDesc">工程与语音文件将保存在该位置下的子文件夹中。</p>
+    <div class="row dir-row">
+      <input id="storageInput" type="text" placeholder="选择或输入存储位置">
+      <button id="storagePick" class="ghost-btn">选择</button>
+    </div>
+    <div class="modal-btns">
+      <button id="storageCancel" class="ghost-btn hidden">取消</button>
+      <button id="storageOk" class="primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
