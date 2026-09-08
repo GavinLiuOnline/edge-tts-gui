@@ -24,6 +24,7 @@ const els = {
 
 let voicesByLocale = {};   // locale -> voices[]
 let converting = false;
+let pending = null;        // 待保存的转换结果 {task_id, file, project}
 let CFG = { projects_root: "", first_run: false };
 
 /* ---------------- 工具 ---------------- */
@@ -161,6 +162,7 @@ els.fileList.addEventListener("click", async (e) => {
   if (e.target.classList.contains("play")) {
     els.player.src = `/api/audio?project=${proj}&file=${encodeURIComponent(name)}`;
     els.resultCard.classList.remove("hidden");
+    els.saveRow.classList.add("hidden");
     els.resultFile.textContent = `${els.projectSel.value} / ${name}`;
     els.player.play().catch(() => {});
   } else if (e.target.classList.contains("del")) {
@@ -208,17 +210,51 @@ async function convert() {
     }
     if (status.status === "error") throw new Error(status.error);
 
-    toast(`转换完成，已保存到工程「${project}」`, "ok");
-    els.player.src = `/api/audio?project=${encodeURIComponent(project)}&file=${encodeURIComponent(status.file)}`;
+    // 转换完成先试听, 确认无误后点「保存到工程」才写入工程文件夹
+    pending = { task_id, file: status.file, project };
+    els.player.src = `/api/draft/${task_id}`;
     els.resultCard.classList.remove("hidden");
-    els.resultFile.textContent = `${project} / ${status.file}`;
-    loadFiles();
+    els.resultFile.textContent = `试听中（未保存）· ${fmtSize(status.size)}`;
+    els.saveName.value = status.file;
+    els.saveRow.classList.remove("hidden");
+    els.player.play().catch(() => {});
+    toast("转换完成，试听确认后点击保存", "ok");
   } catch (e) {
     toast("转换失败：" + e.message, "err");
   } finally {
     converting = false;
     els.convertBtn.disabled = false;
     setTimeout(() => els.progress.classList.add("hidden"), 800);
+  }
+}
+
+/* ---------------- 保存 ---------------- */
+async function saveResult() {
+  if (!pending) return;
+  const name = els.saveName.value.trim();
+  if (!name) { toast("请填写文件名", "err"); return; }
+  const project = els.projectSel.value || pending.project;
+  els.saveBtn.disabled = true;
+  const old = els.saveBtn.textContent;
+  els.saveBtn.textContent = "保存中…";
+  try {
+    const r = await (await api("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task_id: pending.task_id, project, filename: name }),
+    })).json();
+    toast(`已保存到工程「${r.project}」：${r.file}`, "ok");
+    els.resultFile.textContent = `${r.project} / ${r.file}`;
+    els.saveRow.classList.add("hidden");
+    // 切到已保存文件继续播放, 草稿此时已清理
+    els.player.src = `/api/audio?project=${encodeURIComponent(r.project)}&file=${encodeURIComponent(r.file)}`;
+    pending = null;
+    if (els.projectSel.value === r.project) loadFiles();
+  } catch (e) {
+    toast("保存失败：" + e.message, "err");
+  } finally {
+    els.saveBtn.disabled = false;
+    els.saveBtn.textContent = old;
   }
 }
 
@@ -235,6 +271,7 @@ els.countrySel.addEventListener("change", onCountryChange);
 els.voiceSel.addEventListener("change", updateHint);
 els.previewBtn.addEventListener("click", preview);
 els.convertBtn.addEventListener("click", convert);
+els.saveBtn.addEventListener("click", saveResult);
 
 els.text.addEventListener("input", () => {
   els.charCount.textContent = `${els.text.value.length} 字`;
@@ -265,7 +302,7 @@ els.clearBtn.addEventListener("click", () => {
 
 els.projectSel.addEventListener("change", () => {
   loadFiles();
-  els.resultFile.textContent = "";
+  if (!pending) els.resultFile.textContent = "";
 });
 
 els.openBtn.addEventListener("click", async () => {

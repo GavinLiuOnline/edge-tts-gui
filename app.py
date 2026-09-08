@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 # ---------------------------------------------------------------- 路径
 # 缓存目录可用 TTS_UI_CACHE 覆盖; 工程默认位置可用 TTS_UI_HOME 覆盖(可在应用内更改)
 CACHE_DIR = Path(os.environ.get("TTS_UI_CACHE", str(Path.home() / ".tts_ui_cache" / "previews")))
+DRAFT_DIR = CACHE_DIR / "_drafts"   # 转换结果先落草稿, 确认后才存入工程
 CONFIG_PATH = Path(os.environ.get("TTS_UI_CONFIG", str(Path.home() / ".tts_ui_config.json")))
 DEFAULT_PROJECTS_ROOT = Path(os.environ.get("TTS_UI_HOME", str(Path.home() / "tts-projects")))
 if getattr(sys, "frozen", False):  # PyInstaller 打包后 static 在解包目录内
@@ -65,6 +66,11 @@ def projects_root() -> Path:
 
 def ensure_dirs():
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    DRAFT_DIR.mkdir(parents=True, exist_ok=True)
+    # 清理超过 24 小时的旧草稿
+    for f in DRAFT_DIR.glob("*.mp3"):
+        if time.time() - f.stat().st_mtime > 86400:
+            f.unlink(missing_ok=True)
     root = projects_root()
     root.mkdir(parents=True, exist_ok=True)
     if not any(root.iterdir()):
@@ -324,15 +330,18 @@ class SynthBody(BaseModel):
 
 
 async def _run_task(task_id: str, body: "SynthBody"):
+    """合成到草稿目录, 由用户试听确认后再保存到工程。"""
     t = _tasks[task_id]
     try:
-        out = safe_path(body.project) / make_filename(body.voice, body.text)
+        DRAFT_DIR.mkdir(parents=True, exist_ok=True)
+        name = make_filename(body.voice, body.text)
+        out = DRAFT_DIR / f"{task_id}.mp3"
         chunks = split_text(body.text)
         t["total"] = len(chunks)
         o = opts_str(body.rate, body.volume, body.pitch)
         parts = []
         for i, chunk in enumerate(chunks):
-            part = out.with_name(f"{out.stem}__p{i}.mp3")
+            part = out.with_name(f"{task_id}__p{i}.mp3")
             await edge_tts.Communicate(chunk, body.voice, **o).save(str(part))
             parts.append(part)
             t["done"] = i + 1
@@ -342,8 +351,13 @@ async def _run_task(task_id: str, body: "SynthBody"):
         for p in parts:
             p.unlink(missing_ok=True)
         t["status"] = "done"
-        t["file"] = out.name
+        t["file"] = name          # 建议文件名, 保存时使用
+        t["draft"] = str(out)
+        t["size"] = out.stat().st_size
     except Exception as e:
+        # 失败时清除该任务所有残留文件
+        for f in list(DRAFT_DIR.glob(f"{task_id}*")):
+            f.unlink(missing_ok=True)
         t["status"] = "error"
         t["error"] = str(e)
 
@@ -355,7 +369,8 @@ async def api_synthesize(body: SynthBody):
     safe_path(body.project)  # 校验工程存在
     task_id = uuid.uuid4().hex
     _tasks[task_id] = {"status": "running", "done": 0, "total": 0,
-                       "file": None, "error": None, "ts": time.time()}
+                       "file": None, "error": None, "draft": None, "size": 0,
+                       "ts": time.time()}
     asyncio.get_event_loop().create_task(_run_task(task_id, body))
     return {"task_id": task_id}
 
@@ -365,7 +380,53 @@ async def api_progress(task_id: str):
     t = _tasks.get(task_id)
     if not t:
         raise HTTPException(404, "任务不存在")
-    return {k: t[k] for k in ("status", "done", "total", "file", "error")}
+    return {k: t[k] for k in ("status", "done", "total", "file", "error", "size")}
+
+
+def _draft_path(task_id: str) -> Path:
+    t = _tasks.get(task_id)
+    if not t or t.get("status") != "done" or not t.get("draft"):
+        raise HTTPException(404, "试听内容不存在或已过期")
+    p = Path(t["draft"])
+    if not p.is_file():
+        raise HTTPException(404, "试听内容已过期，请重新转换")
+    return p
+
+
+@app.get("/api/draft/{task_id}")
+def api_draft(task_id: str):
+    """试听尚未保存的转换结果。"""
+    return FileResponse(_draft_path(task_id), media_type="audio/mpeg")
+
+
+class SaveBody(BaseModel):
+    task_id: str
+    project: str
+    filename: str | None = None
+
+
+@app.post("/api/save")
+def api_save(body: SaveBody):
+    """确认无误后, 把草稿保存到工程文件夹。"""
+    src = _draft_path(body.task_id)
+    t = _tasks[body.task_id]
+    name = (body.filename or t["file"] or src.name).strip()
+    if not name.lower().endswith(".mp3"):
+        name += ".mp3"
+    dest = safe_path(body.project, name)
+    if dest.exists():   # 同名自动加序号, 不覆盖已有文件
+        stem, i = dest.stem, 2
+        while dest.exists():
+            dest = dest.with_name(f"{stem}_{i}.mp3")
+            i += 1
+    try:
+        shutil.copyfile(src, dest)
+    except Exception as e:
+        raise HTTPException(500, f"保存失败: {e}")
+    src.unlink(missing_ok=True)
+    t["draft"] = None
+    t["saved"] = str(dest)
+    return {"ok": True, "file": dest.name, "project": body.project}
 
 
 @app.get("/api/config")
