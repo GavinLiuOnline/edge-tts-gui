@@ -2,7 +2,7 @@
 # macOS 打包: 产出 dist/Edge TTS 语音工作台.dmg (需在 macOS 上运行, 且安装了 Python 3.10+)
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=1.1.2
+VERSION=1.1.3
 
 echo "==> 安装依赖"
 pip3 install -r requirements.txt pyinstaller pillow

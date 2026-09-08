@@ -39,7 +39,7 @@ else:
     STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APP_NAME = "Edge TTS 语音工作台"
-APP_VERSION = "1.1.2"
+APP_VERSION = "1.1.3"
 
 # ---------------------------------------------------------------- 配置与工程
 def load_config() -> dict:
