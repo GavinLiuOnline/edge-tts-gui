@@ -2,7 +2,7 @@
 # Linux 打包: PyInstaller onefile + deb + AppImage
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=1.1.3
+VERSION=1.1.4
 APP=tts-ui
 
 # GUI 后端依赖 python3-gi (系统包, pip 无法安装), 缺失会导致打包产物回退浏览器模式
@@ -92,7 +92,18 @@ HERE="$(dirname "$(readlink -f "$0")")"
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
-# 输入法: 检测 fcitx/ibus 并补缺 GTK_IM_MODULE
+# 输入法: 让 AppImage 内部的 GTK 找到宿主 fcitx5/ibus 的 GTK3 immodule
+# AppImage 默认屏蔽宿主路径, GTK_PATH 是 GTK 加载模块用的路径
+HOST_IM_PATH=/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules
+if [ -d "$HOST_IM_PATH" ]; then
+  export GTK_PATH="${GTK_PATH:+$GTK_PATH:}$HOST_IM_PATH"
+fi
+HOST_GTK_MODULES=/usr/lib/x86_64-linux-gnu/gtk-3.0/modules
+if [ -d "$HOST_GTK_MODULES" ]; then
+  export GTK_PATH="${GTK_PATH:+$GTK_PATH:}$HOST_GTK_MODULES"
+fi
+
+# 自动检测 fcitx5/fcitx/ibus 进程并补缺 IM 环境变量
 if [ -z "$GTK_IM_MODULE" ]; then
   if pgrep -x fcitx5 >/dev/null 2>&1 || pgrep -x fcitx >/dev/null 2>&1; then
     export GTK_IM_MODULE=fcitx
@@ -102,6 +113,9 @@ if [ -z "$GTK_IM_MODULE" ]; then
 fi
 if [ -z "$XMODIFIERS" ] && [ -n "$GTK_IM_MODULE" ]; then
   export XMODIFIERS="@im=$GTK_IM_MODULE"
+fi
+if [ -n "$GTK_IM_MODULE" ]; then
+  export QT_IM_MODULE="${QT_IM_MODULE:-$GTK_IM_MODULE}"
 fi
 
 exec "$HERE/usr/bin/tts-ui" "$@"

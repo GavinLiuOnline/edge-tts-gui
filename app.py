@@ -39,7 +39,7 @@ else:
     STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APP_NAME = "Edge TTS 语音工作台"
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.1.4"
 
 # ---------------------------------------------------------------- 配置与工程
 def load_config() -> dict:
@@ -713,7 +713,10 @@ def _gui_alert(title: str, msg: str):
 
 
 def _detect_im_daemon() -> str:
-    """扫描 /proc 检测运行中的输入法进程, 返回 'fcitx' / 'ibus' / ''。"""
+    """扫描 /proc 检测运行中的输入法进程, 返回 'fcitx' / 'ibus' / ''。
+
+    fcitx5 与 fcitx 都用 fcitx immodule (GTK_IM_MODULE=fcitx),
+    所以二者都映射到 'fcitx'。"""
     try:
         for pid in os.listdir("/proc"):
             if not pid.isdigit():
@@ -723,7 +726,7 @@ def _detect_im_daemon() -> str:
                     cmd = f.read().replace(b"\0", b" ").decode("utf-8", "ignore")
             except OSError:
                 continue
-            if "fcitx" in cmd:
+            if "fcitx" in cmd:        # fcitx5 / fcitx 进程名都匹配
                 return "fcitx"
             if "ibus-daemon" in cmd:
                 return "ibus"

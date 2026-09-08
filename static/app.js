@@ -1,53 +1,6 @@
 /* Edge TTS 语音工作台 前端逻辑 */
 const $ = (id) => document.getElementById(id);
 
-const els = {
-  text: $("textInput"), charCount: $("charCount"),
-  importBtn: $("importBtn"), fileInput: $("fileInput"), clearBtn: $("clearBtn"),
-  countrySel: $("countrySel"), voiceSel: $("voiceSel"), voiceHint: $("voiceHint"),
-  previewBtn: $("previewBtn"),
-  rate: $("rate"), volume: $("volume"), pitch: $("pitch"),
-  rateVal: $("rateVal"), volumeVal: $("volumeVal"), pitchVal: $("pitchVal"),
-  convertBtn: $("convertBtn"), progress: $("progress"), bar: document.querySelector(".progress .bar i"),
-  progressText: $("progressText"),
-  projectSel: $("projectSel"), newProjBtn: $("newProjBtn"), openBtn: $("openBtn"),
-  storageBtn: $("storageBtn"),
-  resultCard: $("resultCard"), player: $("player"), resultFile: $("resultFile"),
-  fileList: $("fileList"), refreshBtn: $("refreshBtn"),
-  toast: $("toast"),
-  modal: $("modal"), projNameInput: $("projNameInput"), modalOk: $("modalOk"), modalCancel: $("modalCancel"),
-  projDirInput: $("projDirInput"), projDirPick: $("projDirPick"),
-  storageModal: $("storageModal"), storageTitle: $("storageTitle"), storageDesc: $("storageDesc"),
-  storageInput: $("storageInput"), storagePick: $("storagePick"),
-  storageOk: $("storageOk"), storageCancel: $("storageCancel"),
-};
-
-let voicesByLocale = {};   // locale -> voices[]
-let converting = false;
-let pending = null;        // 待保存的转换结果 {task_id, file, project}
-let CFG = { projects_root: "", first_run: false };
-
-// 三个下拉用自定义组件替代原生 select (WebKitGTK 兼容)
-els.countrySel = new Dropdown($("countrySel"), { placeholder: "加载中…", onChange: onCountryChange });
-els.voiceSel = new Dropdown($("voiceSel"), { placeholder: "请先选择国家/地区", onChange: updateHint });
-els.projectSel = new Dropdown($("projectSel"), {
-  onChange: () => { loadFiles(); if (!pending) els.resultFile.textContent = ""; },
-});
-els.voiceSel.disabled = true;   // 未加载音色前不可选
-
-/* ---------------- 工具 ---------------- */
-function toast(msg, type = "") {
-  els.toast.textContent = msg;
-  els.toast.className = "toast " + type;
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => els.toast.classList.add("hidden"), 2600);
-}
-
-const isGUI = () => !!(window.pywebview && window.pywebview.api);
-
-/* ---------------- 自定义下拉组件 ----------------
- * 替代原生 <select>: WebKitGTK 旧版原生下拉弹出窗口存在
- * 点击失效/位置异常等已知问题 (WebKit Bug 210056 等)。 */
 class Dropdown {
   constructor(root, { placeholder = "请选择", onChange = null } = {}) {
     this.root = root;
@@ -164,6 +117,55 @@ class Dropdown {
     }
   }
 }
+const els = {
+  text: $("textInput"), charCount: $("charCount"),
+  importBtn: $("importBtn"), fileInput: $("fileInput"), clearBtn: $("clearBtn"),
+  countrySel: $("countrySel"), voiceSel: $("voiceSel"), voiceHint: $("voiceHint"),
+  previewBtn: $("previewBtn"),
+  rate: $("rate"), volume: $("volume"), pitch: $("pitch"),
+  rateVal: $("rateVal"), volumeVal: $("volumeVal"), pitchVal: $("pitchVal"),
+  convertBtn: $("convertBtn"), progress: $("progress"), bar: document.querySelector(".progress .bar i"),
+  progressText: $("progressText"),
+  projectSel: $("projectSel"), newProjBtn: $("newProjBtn"), openBtn: $("openBtn"),
+  storageBtn: $("storageBtn"),
+  resultCard: $("resultCard"), player: $("player"), resultFile: $("resultFile"),
+  fileList: $("fileList"), refreshBtn: $("refreshBtn"),
+  saveRow: $("saveRow"), saveName: $("saveName"), saveBtn: $("saveBtn"),
+  toast: $("toast"),
+  modal: $("modal"), projNameInput: $("projNameInput"), modalOk: $("modalOk"), modalCancel: $("modalCancel"),
+  projDirInput: $("projDirInput"), projDirPick: $("projDirPick"),
+  storageModal: $("storageModal"), storageTitle: $("storageTitle"), storageDesc: $("storageDesc"),
+  storageInput: $("storageInput"), storagePick: $("storagePick"),
+  storageOk: $("storageOk"), storageCancel: $("storageCancel"),
+};
+
+let voicesByLocale = {};   // locale -> voices[]
+let converting = false;
+let pending = null;        // 待保存的转换结果 {task_id, file, project}
+let CFG = { projects_root: "", first_run: false };
+
+// 三个下拉用自定义组件替代原生 select (WebKitGTK 兼容)
+els.countrySel = new Dropdown($("countrySel"), { placeholder: "加载中…", onChange: onCountryChange });
+els.voiceSel = new Dropdown($("voiceSel"), { placeholder: "请先选择国家/地区", onChange: updateHint });
+els.projectSel = new Dropdown($("projectSel"), {
+  onChange: () => { loadFiles(); if (!pending) els.resultFile.textContent = ""; },
+});
+els.voiceSel.disabled = true;   // 未加载音色前不可选
+
+/* ---------------- 工具 ---------------- */
+function toast(msg, type = "") {
+  els.toast.textContent = msg;
+  els.toast.className = "toast " + type;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => els.toast.classList.add("hidden"), 2600);
+}
+
+/* ---------------- 自定义下拉组件 ---------------- * 替代原生 <select>: WebKitGTK 旧版原生下拉弹出窗口存在
+ * 点击失效/位置异常等已知问题 (WebKit Bug 210056 等)。
+ * 注意: 必须先定义再使用, 否则 WebKitGTK 抛 "Cannot access 'Dropdown'
+ * before initialization" 会导致页面脚本中断, 按钮事件全部丢失。 */
+
+const isGUI = () => !!(window.pywebview && window.pywebview.api);
 
 async function pickFolder() {
   if (isGUI()) {
