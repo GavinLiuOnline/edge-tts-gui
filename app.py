@@ -37,7 +37,7 @@ else:
     STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APP_NAME = "Edge TTS 语音工作台"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 # ---------------------------------------------------------------- 配置与工程
 def load_config() -> dict:
@@ -628,6 +628,28 @@ def _win_install_webview2():
     return False
 
 
+def _gui_alert(title: str, msg: str):
+    """弹窗提示 (tkinter/zenity/kdialog), 全部不可用时静默跳过。"""
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showwarning(title, msg)
+        root.destroy()
+        return
+    except Exception:
+        pass
+    for cmd in (["zenity", "--warning", f"--title={title}", msg],
+                ["kdialog", "--title", title, "--sorry", msg]):
+        try:
+            if shutil.which(cmd[0]):
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+        except Exception:
+            continue
+
+
 def check_and_install_deps():
     """启动前依赖自检: 缺失自动安装, 无法安装时给出提示。"""
     _pip_install_missing()
@@ -635,6 +657,10 @@ def check_and_install_deps():
         return None
     if sys.platform.startswith("linux") and not _linux_webkit_ok():
         if not _linux_install_webkit():
+            _gui_alert(APP_NAME, "缺少界面组件 WebKit2GTK，已回退到浏览器模式。\n\n"
+                       "Ubuntu/Debian: sudo apt install gir1.2-webkit2-4.1\n"
+                       "Fedora: sudo dnf install webkit2gtk4.1\n"
+                       "Arch:   sudo pacman -S webkit2gtk")
             print("缺少 WebKit2GTK (libwebkit2gtk), 界面无法启动。\n"
                   "  Ubuntu/Debian: sudo apt install gir1.2-webkit2-4.1\n"
                   "  Fedora: sudo dnf install webkit2gtk4.1\n"
@@ -647,6 +673,14 @@ def check_and_install_deps():
         except Exception as e:
             print(f"WebView2 Runtime 安装失败: {e}\n"
                   "请到 https://developer.microsoft.com/microsoft-edge/webview2 手动安装。", flush=True)
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    None, f"WebView2 Runtime 安装失败: {e}\n"
+                    "请到 https://developer.microsoft.com/microsoft-edge/webview2 手动安装。",
+                    APP_NAME, 0x30)
+            except Exception:
+                pass
     return None
 
 
@@ -676,6 +710,25 @@ def run_gui(port: int):
 
 
 def main():
+    if "--selftest" in sys.argv:
+        # 打包自检: 校验 GUI 后端可用 (不启动服务、不弹依赖安装)
+        try:
+            import webview  # noqa: F401
+            if sys.platform.startswith("linux"):
+                ok = _linux_webkit_ok()
+            elif sys.platform == "win32":
+                import webview.platforms.edgechromium  # noqa: F401
+                ok = True
+            elif sys.platform == "darwin":
+                import webview.platforms.cocoa  # noqa: F401
+                ok = True
+            else:
+                ok = False
+        except Exception:
+            ok = False
+        print(f"SELFTEST_GUI={'1' if ok else '0'}", flush=True)
+        sys.exit(0 if ok else 1)
+
     fallback = check_and_install_deps()
     ensure_dirs()
     if "--web" in sys.argv or fallback == "web":

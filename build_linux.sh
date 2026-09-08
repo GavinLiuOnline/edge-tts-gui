@@ -2,16 +2,31 @@
 # Linux 打包: PyInstaller onefile + deb + AppImage
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=1.1.0
+VERSION=1.1.1
 APP=tts-ui
+
+# GUI 后端依赖 python3-gi (系统包, pip 无法安装), 缺失会导致打包产物回退浏览器模式
+if ! python3 -c "import gi" 2>/dev/null; then
+  echo "错误: 缺少 python3-gi (PyGObject)。请先安装:"
+  echo "  Ubuntu/Debian: sudo apt install python3-gi python3-gi-cairo gir1.2-webkit2-4.1"
+  echo "  Fedora: sudo dnf install python3-gobject webkit2gtk4.1"
+  exit 1
+fi
 
 echo "==> [1/4] 生成图标"
 python3 tools/make_icon.py
 
 echo "==> [2/4] PyInstaller 打包"
-pyinstaller --noconfirm --clean tts-ui.spec
+python3 -m PyInstaller --noconfirm --clean tts-ui.spec
 
-echo "==> [3/4] 构建 deb"
+echo "==> [3/4] 打包产物自检 (GUI 后端)"
+if ! dist/$APP --selftest; then
+  echo "错误: 打包产物缺少 GUI 后端 (gi/WebKit), 运行会回退浏览器模式。"
+  echo "请确认构建环境已安装 python3-gi 与 gir1.2-webkit2-4.1。"
+  exit 1
+fi
+
+echo "==> [4/4] 构建 deb"
 DEB="packaging/deb/${APP}_${VERSION}_amd64"
 rm -rf "$DEB"
 mkdir -p "$DEB/DEBIAN" "$DEB/opt/$APP" "$DEB/usr/bin" \
