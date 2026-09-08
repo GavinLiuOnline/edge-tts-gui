@@ -27,6 +27,14 @@ let converting = false;
 let pending = null;        // 待保存的转换结果 {task_id, file, project}
 let CFG = { projects_root: "", first_run: false };
 
+// 三个下拉用自定义组件替代原生 select (WebKitGTK 兼容)
+els.countrySel = new Dropdown($("countrySel"), { placeholder: "加载中…", onChange: onCountryChange });
+els.voiceSel = new Dropdown($("voiceSel"), { placeholder: "请先选择国家/地区", onChange: updateHint });
+els.projectSel = new Dropdown($("projectSel"), {
+  onChange: () => { loadFiles(); if (!pending) els.resultFile.textContent = ""; },
+});
+els.voiceSel.disabled = true;   // 未加载音色前不可选
+
 /* ---------------- 工具 ---------------- */
 function toast(msg, type = "") {
   els.toast.textContent = msg;
@@ -36,6 +44,126 @@ function toast(msg, type = "") {
 }
 
 const isGUI = () => !!(window.pywebview && window.pywebview.api);
+
+/* ---------------- 自定义下拉组件 ----------------
+ * 替代原生 <select>: WebKitGTK 旧版原生下拉弹出窗口存在
+ * 点击失效/位置异常等已知问题 (WebKit Bug 210056 等)。 */
+class Dropdown {
+  constructor(root, { placeholder = "请选择", onChange = null } = {}) {
+    this.root = root;
+    this.placeholder = placeholder;
+    this.onChange = onChange;
+    this._value = "";
+    this._disabled = false;
+    this._open = false;
+    this._active = -1;
+    this._items = [];
+    root.classList.add("dd");
+    root.innerHTML =
+      `<button type="button" class="dd-toggle"><span class="dd-value dd-ph"></span><i class="dd-arrow">▾</i></button>` +
+      `<div class="dd-menu"></div>`;
+    this.toggle = root.querySelector(".dd-toggle");
+    this.menu = root.querySelector(".dd-menu");
+    this.valEl = root.querySelector(".dd-value");
+    this.toggle.addEventListener("click", () => !this._disabled && (this._open ? this.close() : this.open()));
+    this.menu.addEventListener("click", (e) => {
+      const it = e.target.closest(".dd-item");
+      if (it) this.select(it.dataset.value);
+    });
+    this.toggle.addEventListener("keydown", (e) => this._key(e));
+    this._docClose = (e) => { if (!root.contains(e.target)) this.close(); };
+    document.addEventListener("click", this._docClose);
+  }
+
+  get value() { return this._value; }
+  set value(v) {
+    if (!this._items.some((i) => i.value === v)) return;
+    this._value = v;
+    this._renderValue();
+    this._syncSelected();
+  }
+
+  set disabled(b) {
+    this._disabled = b;
+    this.root.classList.toggle("dd-disabled", b);
+    if (b) this.close();
+  }
+  get disabled() { return this._disabled; }
+
+  /* items: [{value, label, title?}] ; 与原生 select 一致, 未找到 keepValue 时自动选第一项 */
+  setOptions(items, keepValue) {
+    this._items = items;
+    const has = items.some((i) => i.value === keepValue);
+    this._value = has ? keepValue : (items.length ? items[0].value : "");
+    this._renderMenu();
+    this._renderValue();
+  }
+
+  select(v) {
+    if (v === this._value) { this.close(); return; }
+    this.value = v;
+    this.close();
+    if (this.onChange) this.onChange();
+  }
+
+  open() {
+    if (this._disabled || !this._items.length) return;
+    this._open = true;
+    this.root.classList.add("open");
+    this._active = this._items.findIndex((i) => i.value === this._value);
+    this._highlight();
+  }
+
+  close() {
+    this._open = false;
+    this._active = -1;
+    this.root.classList.remove("open");
+  }
+
+  _renderMenu() {
+    if (!this._items.length) {
+      this.menu.innerHTML = `<div class="dd-empty">暂无选项</div>`;
+      return;
+    }
+    this.menu.innerHTML = this._items
+      .map((i) => `<div class="dd-item${i.value === this._value ? " selected" : ""}" data-value="${i.value}"${i.title ? ` title="${i.title}"` : ""}>${i.label}</div>`)
+      .join("");
+  }
+
+  _syncSelected() {
+    [...this.menu.children].forEach((el) => el.classList.toggle("selected", el.dataset.value === this._value));
+  }
+
+  _renderValue() {
+    const cur = this._items.find((i) => i.value === this._value);
+    this.valEl.textContent = cur ? cur.label : this.placeholder;
+    this.valEl.classList.toggle("dd-ph", !cur);
+  }
+
+  _highlight() {
+    [...this.menu.children].forEach((el, i) => el.classList.toggle("active", i === this._active));
+    const el = this.menu.children[this._active];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }
+
+  _key(e) {
+    if (this._disabled) return;
+    if (!this._open) {
+      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); this.open(); }
+      return;
+    }
+    if (e.key === "Escape") { this.close(); return; }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const n = this._items.length;
+      if (!n) return;
+      this._active = e.key === "ArrowDown" ? Math.min(this._active + 1, n - 1) : Math.max(this._active - 1, 0);
+      this._highlight();
+    } else if (e.key === "Enter" && this._active >= 0 && this._items[this._active]) {
+      this.select(this._items[this._active].value);
+    }
+  }
+}
 
 async function pickFolder() {
   if (isGUI()) {
@@ -70,21 +198,25 @@ async function loadVoices() {
     const data = await (await api("/api/voices")).json();
     voicesByLocale = {};
     for (const c of data) voicesByLocale[c.locale] = c.voices;
-    els.countrySel.innerHTML = data
-      .map((c) => `<option value="${c.locale}">${c.country}（${c.voices.length}）</option>`)
-      .join("");
+    els.countrySel.disabled = false;
+    els.countrySel.setOptions(
+      data.map((c) => ({ value: c.locale, label: `${c.country}（${c.voices.length}）` })),
+      els.countrySel.value
+    );
     onCountryChange();
   } catch (e) {
-    els.countrySel.innerHTML = `<option value="">音色加载失败：${e.message}</option>`;
+    els.countrySel.setOptions([{ value: "", label: `音色加载失败：${e.message}` }]);
+    els.countrySel.disabled = true;
   }
 }
 
 function onCountryChange() {
   const locale = els.countrySel.value;
   const voices = voicesByLocale[locale] || [];
-  els.voiceSel.innerHTML = voices
-    .map((v) => `<option value="${v.name}">${v.display} · ${v.gender}声</option>`)
-    .join("");
+  els.voiceSel.setOptions(
+    voices.map((v) => ({ value: v.name, label: `${v.display} · ${v.gender}声` })),
+    els.voiceSel.value
+  );
   els.voiceSel.disabled = voices.length === 0;
   els.previewBtn.disabled = voices.length === 0;
   updateHint();
@@ -92,6 +224,7 @@ function onCountryChange() {
 
 function updateHint() {
   const v = els.voiceSel.value;
+  els.convertBtn.disabled = !els.text.value.trim() || !v;
   if (!v) { els.voiceHint.textContent = ""; return; }
   const info = (voicesByLocale[els.countrySel.value] || []).find((o) => o.name === v);
   els.voiceHint.textContent = `当前音色：${info ? info.display : v}`;
@@ -125,10 +258,10 @@ async function loadConfig() {
 async function loadProjects(keep) {
   const list = await (await api("/api/projects")).json();
   const cur = keep || els.projectSel.value;
-  els.projectSel.innerHTML = list
-    .map((p) => `<option value="${p.name}" title="${p.path}">${p.name}${p.external ? " 〔外部〕" : ""}</option>`)
-    .join("");
-  if (cur && list.some((p) => p.name === cur)) els.projectSel.value = cur;
+  els.projectSel.setOptions(
+    list.map((p) => ({ value: p.name, label: p.name + (p.external ? " 〔外部〕" : ""), title: p.path })),
+    cur
+  );
   loadFiles();
 }
 
@@ -186,6 +319,8 @@ async function convert() {
   if (!project) { toast("请先选择或创建工程", "err"); return; }
 
   converting = true;
+  pending = null;
+  els.saveRow.classList.add("hidden");
   els.convertBtn.disabled = true;
   els.progress.classList.remove("hidden");
   setProgress(0, 0);
@@ -267,8 +402,6 @@ function setProgress(done, total) {
 }
 
 /* ---------------- 事件绑定 ---------------- */
-els.countrySel.addEventListener("change", onCountryChange);
-els.voiceSel.addEventListener("change", updateHint);
 els.previewBtn.addEventListener("click", preview);
 els.convertBtn.addEventListener("click", convert);
 els.saveBtn.addEventListener("click", saveResult);
@@ -298,11 +431,6 @@ els.fileInput.addEventListener("change", () => {
 els.clearBtn.addEventListener("click", () => {
   els.text.value = "";
   els.text.dispatchEvent(new Event("input"));
-});
-
-els.projectSel.addEventListener("change", () => {
-  loadFiles();
-  if (!pending) els.resultFile.textContent = "";
 });
 
 els.openBtn.addEventListener("click", async () => {

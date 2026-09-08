@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import uuid
 import webbrowser
 from pathlib import Path
@@ -38,7 +39,7 @@ else:
     STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APP_NAME = "Edge TTS 语音工作台"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 
 # ---------------------------------------------------------------- 配置与工程
 def load_config() -> dict:
@@ -711,6 +712,61 @@ def _gui_alert(title: str, msg: str):
             continue
 
 
+def _detect_im_daemon() -> str:
+    """扫描 /proc 检测运行中的输入法进程, 返回 'fcitx' / 'ibus' / ''。"""
+    try:
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                    cmd = f.read().replace(b"\0", b" ").decode("utf-8", "ignore")
+            except OSError:
+                continue
+            if "fcitx" in cmd:
+                return "fcitx"
+            if "ibus-daemon" in cmd:
+                return "ibus"
+    except OSError:
+        pass
+    return ""
+
+
+def _fix_linux_im():
+    """修复 WebKitGTK 中文输入法: 确保 GTK_IM_MODULE/XMODIFIERS 指向正在运行的输入法框架。
+
+    仅补缺, 不覆盖用户已有的设置。须在 GTK 初始化 (webview.create_window) 之前调用。
+    """
+    if sys.platform != "linux":
+        return
+    # DMABUF 渲染器在部分显卡 (Intel Xe 等) 上崩溃会导致白屏/闪退
+    # (Ubuntu 22.04 webkit2gtk 2.36-2.40 常见), 关闭走传统渲染路径。
+    os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+    os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+    if os.environ.get("GTK_IM_MODULE"):
+        return
+    im = _detect_im_daemon()
+    if not im:
+        xmods = os.environ.get("XMODIFIERS", "")
+        m = re.search(r"@im=(\w+)", xmods)
+        im = m.group(1) if m else ""
+    if im in ("fcitx", "ibus"):
+        os.environ["GTK_IM_MODULE"] = im
+        os.environ.setdefault("XMODIFIERS", f"@im={im}")
+        os.environ.setdefault("QT_IM_MODULE", im)
+
+
+def _log_crash(e: BaseException):
+    """GUI 模式下未捕获异常写入缓存目录 crash.log, 便于排查闪退。"""
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(CACHE_DIR / "crash.log", "a", encoding="utf-8") as f:
+            f.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} v{APP_VERSION} =====\n")
+            traceback.print_exc(file=f)
+    except Exception:
+        pass
+
+
 def check_and_install_deps():
     """启动前依赖自检: 缺失自动安装, 无法安装时给出提示。"""
     _pip_install_missing()
@@ -771,6 +827,16 @@ def run_gui(port: int):
 
 
 def main():
+    try:
+        _main()
+    except SystemExit:
+        raise
+    except BaseException as e:
+        _log_crash(e)
+        raise
+
+
+def _main():
     if "--selftest" in sys.argv:
         # 打包自检: 校验 GUI 后端可用 (不启动服务、不弹依赖安装)
         try:
@@ -803,6 +869,8 @@ def main():
         except KeyboardInterrupt:
             pass
     else:
+        if sys.platform.startswith("linux"):
+            _fix_linux_im()   # 修复 Wayland/打包环境下中文输入法失效
         port, _ = start_server()
         run_gui(port)
 

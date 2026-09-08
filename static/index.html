@@ -32,12 +32,12 @@
     <div class="card">
       <div class="card-head"><h2><i class="ic">🎙</i>音色选择</h2></div>
       <div class="grid2">
-        <label class="field"><span>国家 / 地区</span>
-          <select id="countrySel"><option value="">加载中…</option></select>
-        </label>
-        <label class="field"><span>音色</span>
-          <select id="voiceSel" disabled><option>请先选择国家/地区</option></select>
-        </label>
+        <div class="field"><span>国家 / 地区</span>
+          <div id="countrySel"></div>
+        </div>
+        <div class="field"><span>音色</span>
+          <div id="voiceSel"></div>
+        </div>
       </div>
       <div class="preview-row">
         <button id="previewBtn" class="ghost-btn" disabled>▶ 试听音色</button>
@@ -74,7 +74,7 @@
         <button id="storageBtn" class="ghost-btn small" title="修改默认存储位置">位置</button>
       </div>
       <div class="row">
-        <select id="projectSel"></select>
+        <div id="projectSel"></div>
       </div>
       <div class="row btns">
         <button id="newProjBtn" class="ghost-btn">＋ 新建工程</button>

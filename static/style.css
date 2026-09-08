@@ -73,12 +73,34 @@ textarea:focus { border-color: var(--primary); background: #fff; }
 .field span { display: flex; justify-content: space-between; margin-bottom: 7px; color: var(--text2); font-size: 12.5px; }
 .field output { color: var(--primary); font-weight: 600; }
 
-select {
-  width: 100%; height: 40px; padding: 0 10px; font: inherit;
-  border: 1px solid var(--border); border-radius: 10px; outline: none;
-  background: #fff; color: var(--text); cursor: pointer;
+/* ---------- 自定义下拉 ---------- */
+.dd { position: relative; width: 100%; user-select: none; }
+.dd-toggle {
+  width: 100%; height: 40px; padding: 0 32px 0 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font: inherit; color: var(--text); text-align: left;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
 }
-select:focus { border-color: var(--primary); }
+.dd-toggle:hover, .dd.open .dd-toggle { border-color: var(--primary); }
+.dd-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-value.dd-ph { color: var(--text2); }
+.dd-arrow { font-style: normal; color: var(--text2); font-size: 11px; flex: none; transition: transform .15s; }
+.dd.open .dd-arrow { transform: rotate(180deg); }
+.dd-disabled { opacity: .45; pointer-events: none; }
+.dd-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(30, 41, 59, .14); padding: 4px;
+  max-height: 300px; overflow-y: auto; z-index: 60; display: none;
+}
+.dd.open .dd-menu { display: block; }
+.dd-item {
+  padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 13.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dd-item:hover, .dd-item.active { background: #eef4ff; color: var(--primary); }
+.dd-item.selected { color: var(--primary); font-weight: 600; }
+.dd-empty { color: var(--text2); font-size: 13px; padding: 10px; text-align: center; }
 
 input[type=range] {
   width: 100%; height: 4px; accent-color: var(--primary); cursor: pointer;

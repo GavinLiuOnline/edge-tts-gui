@@ -2,7 +2,7 @@
 # Linux 打包: PyInstaller onefile + deb + AppImage
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=1.1.1
+VERSION=1.1.2
 APP=tts-ui
 
 # GUI 后端依赖 python3-gi (系统包, pip 无法安装), 缺失会导致打包产物回退浏览器模式
@@ -34,6 +34,9 @@ mkdir -p "$DEB/DEBIAN" "$DEB/opt/$APP" "$DEB/usr/bin" \
 cp "dist/$APP" "$DEB/opt/$APP/$APP"
 cat > "$DEB/usr/bin/$APP" <<EOF
 #!/bin/sh
+# 规避 WebKitGTK DMABUF 渲染器在部分显卡上崩溃 (白屏/闪退)
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
 exec /opt/$APP/$APP "\$@"
 EOF
 chmod +x "$DEB/usr/bin/$APP"
@@ -54,7 +57,7 @@ cat > "$DEB/usr/share/applications/$APP.desktop" <<EOF
 Type=Application
 Name=Edge TTS 语音工作台
 Comment=微软 Edge 神经网络语音合成
-Exec=/opt/$APP/$APP
+Exec=/usr/bin/$APP
 Icon=$APP
 Terminal=false
 Categories=Audio;AudioVideo;Utility;
@@ -81,11 +84,28 @@ Terminal=false
 Categories=Audio;AudioVideo;Utility;
 StartupNotify=true
 EOF
-cat > "$APPDIR/AppRun" <<EOF
+cat > "$APPDIR/AppRun" <<'APPRUN_EOF'
 #!/bin/sh
-HERE="\$(dirname "\$(readlink -f "\$0")")"
-exec "\$HERE/usr/bin/$APP" "\$@"
-EOF
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# 规避 WebKitGTK DMABUF 渲染器在部分显卡上崩溃 (白屏/闪退)
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+
+# 输入法: 检测 fcitx/ibus 并补缺 GTK_IM_MODULE
+if [ -z "$GTK_IM_MODULE" ]; then
+  if pgrep -x fcitx5 >/dev/null 2>&1 || pgrep -x fcitx >/dev/null 2>&1; then
+    export GTK_IM_MODULE=fcitx
+  elif pgrep -x ibus-daemon >/dev/null 2>&1; then
+    export GTK_IM_MODULE=ibus
+  fi
+fi
+if [ -z "$XMODIFIERS" ] && [ -n "$GTK_IM_MODULE" ]; then
+  export XMODIFIERS="@im=$GTK_IM_MODULE"
+fi
+
+exec "$HERE/usr/bin/tts-ui" "$@"
+APPRUN_EOF
 chmod +x "$APPDIR/AppRun"
 
 TOOL=packaging/appimagetool-x86_64.AppImage

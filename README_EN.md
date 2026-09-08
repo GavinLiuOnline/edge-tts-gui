@@ -88,6 +88,18 @@ The repo ships with [`.github/workflows/build.yml`](.github/workflows/build.yml)
 - Pushing a `v*` tag (e.g. `git tag v1.1.1 && git push origin v1.1.1`) triggers the three-platform matrix build and publishes to Releases
 - Manual runs are supported via workflow_dispatch
 
+## Troubleshooting
+
+- **Cannot type Chinese (Linux desktop mode)**: on startup the app detects the running input method framework (fcitx/ibus) and injects `GTK_IM_MODULE`. If it still fails, make sure the GTK3 frontend of your IME is installed and launch with the variables set manually:
+  ```bash
+  # fcitx5 users
+  sudo apt install fcitx5-frontend-gtk3   # Fedora: fcitx5-gtk
+  GTK_IM_MODULE=fcitx XMODIFIERS=@im=fcitx tts-ui
+  # ibus users
+  GTK_IM_MODULE=ibus XMODIFIERS=@im=ibus tts-ui
+  ```
+- **Dropdowns not clickable / rendering issues (Linux)**: WebKit2GTK versions older than 2.40 have a known native dropdown popup bug; the app now uses a custom-rendered dropdown to avoid it. If issues persist, upgrade the system package: `sudo apt install libwebkit2gtk-4.1-0`.
+
 ## Configuration
 
 Settings live in `~/.tts_ui_config.json` (projects storage location, project registry, etc.). Default paths can be overridden via environment variables:

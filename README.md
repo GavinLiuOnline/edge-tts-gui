@@ -88,6 +88,18 @@ build_windows.bat
 - 推送 `v*` 标签（如 `git tag v1.1.1 && git push origin v1.1.1`）自动触发三平台矩阵构建，并发布到 Release
 - 也可在 Actions 页面手动触发（workflow_dispatch）
 
+## 故障排查
+
+- **无法输入中文（Linux 桌面模式）**：应用启动时会自动检测运行中的输入法框架（fcitx/ibus）并注入 `GTK_IM_MODULE`。若仍失效，请确认已安装输入法的 GTK3 前端并手动设置环境变量后启动：
+  ```bash
+  # fcitx5 用户
+  sudo apt install fcitx5-frontend-gtk3   # Fedora: fcitx5-gtk
+  GTK_IM_MODULE=fcitx XMODIFIERS=@im=fcitx tts-ui
+  # ibus 用户
+  GTK_IM_MODULE=ibus XMODIFIERS=@im=ibus tts-ui
+  ```
+- **下拉框点不动 / 界面异常（Linux）**：旧版 WebKit2GTK（< 2.40）存在原生下拉弹出窗口缺陷，应用已改用自绘下拉组件规避；若仍有问题请升级系统：`sudo apt install libwebkit2gtk-4.1-0`。
+
 ## 配置与环境变量
 
 配置保存在 `~/.tts_ui_config.json`（工程存储位置、工程注册表等），可通过环境变量覆盖默认路径：
