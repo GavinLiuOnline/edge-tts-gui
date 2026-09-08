@@ -15,6 +15,10 @@
 - **首次启动引导**：第一次打开时引导选择默认工程存储位置
 - **依赖自检**：启动时自动检测缺失依赖并尝试安装（Linux 缺 WebKit2GTK 时通过系统包管理器安装，Windows 缺 WebView2 Runtime 时自动下载微软官方引导程序安装；实在无法安装则回退浏览器模式）
 
+## 效果展示
+
+![主界面](doc/image.png)
+
 ## 下载使用
 
 前往 [Releases](https://github.com/GavinLiuOnline/edge-tts-gui/releases) 下载对应平台产物：

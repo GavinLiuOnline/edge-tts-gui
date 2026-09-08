@@ -15,6 +15,10 @@ No API key required, completely free, runs locally, with a clean and easy-to-use
 - **First-run wizard**: choose the default projects storage location on first launch
 - **Dependency self-check**: missing dependencies are detected at startup and installed automatically (WebKit2GTK via the system package manager on Linux; WebView2 Runtime via Microsoft's official bootstrapper on Windows; falls back to browser mode only as a last resort)
 
+## Screenshot
+
+![Main window](doc/image.png)
+
 ## Download
 
 Grab the artifact for your platform from the [Releases](https://github.com/GavinLiuOnline/edge-tts-gui/releases) page:
