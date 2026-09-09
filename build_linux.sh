@@ -2,7 +2,7 @@
 # Linux 打包: PyInstaller onefile + deb + AppImage
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=1.1.5
+VERSION=1.1.6
 APP=tts-ui
 
 # GUI 后端依赖 python3-gi (系统包, pip 无法安装), 缺失会导致打包产物回退浏览器模式

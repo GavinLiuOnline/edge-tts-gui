@@ -22,6 +22,28 @@ from pathlib import Path
 
 import edge_tts
 import uvicorn
+
+# PyInstaller --noconsole (Windows/macOS 窗口程序) 下 sys.stdout/stderr 为 None,
+# 第三方库调用 .isatty()/.write() 会抛 AttributeError (如 uvicorn 的日志 Formatter),
+# 这里补一个空流兜底。
+if sys.stdout is None or sys.stderr is None:
+    import io
+
+    class _NullStream(io.TextIOBase):
+        def write(self, s):  # noqa: D102
+            return len(s)
+
+        def flush(self):  # noqa: D102
+            pass
+
+        def isatty(self):  # noqa: D102
+            return False
+
+    if sys.stdout is None:
+        sys.stdout = _NullStream()
+    if sys.stderr is None:
+        sys.stderr = _NullStream()
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
@@ -39,7 +61,7 @@ else:
     STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APP_NAME = "Edge TTS 语音工作台"
-APP_VERSION = "1.1.5"
+APP_VERSION = "1.1.6"
 
 # ---------------------------------------------------------------- 配置与工程
 def load_config() -> dict:
@@ -831,7 +853,10 @@ def start_server(port: int = 0) -> tuple[int, uvicorn.Server]:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1] if port == 0 else port
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    # log_config=None: 不让 uvicorn 覆盖 logging 配置, 避免无控制台环境下
+    # 其 DefaultFormatter 访问 sys.stdout.isatty() 失败导致启动崩溃。
+    config = uvicorn.Config(app, host="127.0.0.1", port=port,
+                            log_level="warning", log_config=None)
     server = uvicorn.Server(config)
     threading.Thread(target=server.run, daemon=True).start()
     while not server.started:
