@@ -2,7 +2,7 @@
 # Linux 打包: PyInstaller onefile + deb + AppImage
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=1.1.4
+VERSION=1.1.5
 APP=tts-ui
 
 # GUI 后端依赖 python3-gi (系统包, pip 无法安装), 缺失会导致打包产物回退浏览器模式
@@ -37,6 +37,17 @@ cat > "$DEB/usr/bin/$APP" <<EOF
 # 规避 WebKitGTK DMABUF 渲染器在部分显卡上崩溃 (白屏/闪退)
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
+# 输入法修复: 让 PyInstaller 打包的 GTK 找到 immodules.cache, 详见 AppRun 段注释
+if [ -z "\$GTK_IM_MODULE_FILE" ]; then
+  for c in /usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules.cache \
+           /usr/lib64/gtk-3.0/3.0.0/immodules.cache \
+           /usr/lib/gtk-3.0/3.0.0/immodules.cache; do
+    if [ -f "\$c" ]; then
+      export GTK_IM_MODULE_FILE="\$c"
+      break
+    fi
+  done
+fi
 exec /opt/$APP/$APP "\$@"
 EOF
 chmod +x "$DEB/usr/bin/$APP"
@@ -92,15 +103,18 @@ HERE="$(dirname "$(readlink -f "$0")")"
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
-# 输入法: 让 AppImage 内部的 GTK 找到宿主 fcitx5/ibus 的 GTK3 immodule
-# AppImage 默认屏蔽宿主路径, GTK_PATH 是 GTK 加载模块用的路径
-HOST_IM_PATH=/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules
-if [ -d "$HOST_IM_PATH" ]; then
-  export GTK_PATH="${GTK_PATH:+$GTK_PATH:}$HOST_IM_PATH"
-fi
-HOST_GTK_MODULES=/usr/lib/x86_64-linux-gnu/gtk-3.0/modules
-if [ -d "$HOST_GTK_MODULES" ]; then
-  export GTK_PATH="${GTK_PATH:+$GTK_PATH:}$HOST_GTK_MODULES"
+# 输入法关键修复: PyInstaller 打包的 GTK 副本找不到宿主 immodules.cache,
+# 导致 im-fcitx5.so 不加载 -> 输入法不接入。tts-ui.spec 已排除 GTK 系库改用系统 GTK,
+# 这里再兜底指定 cache 路径, 应对系统 GTK 自身 cache 定位异常的情况。
+if [ -z "$GTK_IM_MODULE_FILE" ]; then
+  for c in /usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules.cache \
+           /usr/lib64/gtk-3.0/3.0.0/immodules.cache \
+           /usr/lib/gtk-3.0/3.0.0/immodules.cache; do
+    if [ -f "$c" ]; then
+      export GTK_IM_MODULE_FILE="$c"
+      break
+    fi
+  done
 fi
 
 # 自动检测 fcitx5/fcitx/ibus 进程并补缺 IM 环境变量

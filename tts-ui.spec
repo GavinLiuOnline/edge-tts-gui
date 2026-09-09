@@ -30,6 +30,24 @@ a = Analysis(
 a.datas = [d for d in a.datas
            if not d[0].startswith(('share/icons', 'share/themes', 'share/locale'))]
 
+# 排除 GTK/GLib 栈, 强制使用系统库。
+# 原因: WebKit2GTK 本身来自系统 (/usr/lib/.../libwebkit2gtk-4.1.so), 若同时加载
+# _MEI 目录里打包的 GTK 副本会造成两份 GTK 混用 -> 白屏; 而且打包副本的编译期
+# prefix 指向构建机, 找不到 immodules.cache -> fcitx5/ibus 输入法完全不接入。
+# 运行前提 (python3-gi + gir1.2-webkit2-4.1) 已保证这些库在目标机存在。
+_SYS_GTK_PREFIXES = (
+    'libgtk-3.', 'libgdk-3.', 'libgdk_pixbuf-2.0.',
+    'libglib-2.0.', 'libgobject-2.0.', 'libgio-2.0.',
+    'libgmodule-2.0.', 'libgthread-2.0.', 'libgirepository-1.0.',
+    'libpango-1.0.', 'libpangocairo-1.0.', 'libpangoft2-1.0.',
+    'libcairo.', 'libcairo-gobject.',
+    'libatk-1.0.', 'libatk-bridge-2.0.', 'libatspi.',
+    'libepoxy.', 'libharfbuzz.', 'libfribidi.', 'libpixman-1.',
+    'librsvg-2.', 'libsoup-', 'libwebkit2gtk-', 'libjavascriptcore',
+)
+a.binaries = [b for b in a.binaries
+              if not b[0].split('/')[-1].startswith(_SYS_GTK_PREFIXES)]
+
 pyz = PYZ(a.pure)
 
 exe = EXE(

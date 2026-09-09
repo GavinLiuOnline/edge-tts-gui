@@ -39,7 +39,7 @@ else:
     STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 APP_NAME = "Edge TTS 语音工作台"
-APP_VERSION = "1.1.4"
+APP_VERSION = "1.1.5"
 
 # ---------------------------------------------------------------- 配置与工程
 def load_config() -> dict:
@@ -735,6 +735,26 @@ def _detect_im_daemon() -> str:
     return ""
 
 
+def _fix_gtk_immodules_cache():
+    """让打包版 (PyInstaller) 的 GTK 副本能找到宿主的 immodules.cache。
+
+    PyInstaller onefile 会把 libgtk-3.so.0 打进 _MEIxxxx 临时目录并优先加载,
+    该副本的编译期 prefix 指向构建机, 找不到 immodules.cache ->
+    im-fcitx5.so / im-ibus.so 完全不加载 -> 输入法无法接入 (只能输英文)。
+    GTK3 只按 immodules.cache 索引加载 immodule, 设 GTK_PATH 无效,
+    必须显式指定 GTK_IM_MODULE_FILE。
+    """
+    if os.environ.get("GTK_IM_MODULE_FILE"):
+        return
+    for p in ("/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules.cache",
+              "/usr/lib64/gtk-3.0/3.0.0/immodules.cache",
+              "/usr/lib/gtk-3.0/3.0.0/immodules.cache",
+              "/usr/lib/aarch64-linux-gnu/gtk-3.0/3.0.0/immodules.cache"):
+        if os.path.isfile(p):
+            os.environ["GTK_IM_MODULE_FILE"] = p
+            return
+
+
 def _fix_linux_im():
     """修复 WebKitGTK 中文输入法: 确保 GTK_IM_MODULE/XMODIFIERS 指向正在运行的输入法框架。
 
@@ -746,6 +766,7 @@ def _fix_linux_im():
     # (Ubuntu 22.04 webkit2gtk 2.36-2.40 常见), 关闭走传统渲染路径。
     os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
     os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+    _fix_gtk_immodules_cache()
     if os.environ.get("GTK_IM_MODULE"):
         return
     im = _detect_im_daemon()
